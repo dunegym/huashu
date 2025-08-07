@@ -139,3 +139,27 @@
   | 深睡眠比例   | N3%                   | $N3\% = \frac{\text{N3期总时长}}{TST} \times 100\%$ |
   | REM睡眠比例  | REM%                  | $REM\% = \frac{\text{REM期总时长}}{TST} \times 100\%$ |
   | 夜间醒来次数 | Number of Awakenings  | 睡眠开始后清醒总次数                       |
+
+
+##### 统计分析
+
+使用重复测量ANOVA比较三种环境下的指标差异，若显著，再进行事后检验（如Tukey HSD）。
+工具：SciPy的stats模块或R语言。
+
+#### 流程
+
+加载Problem 4工作表，提取每个被试在三种环境下的睡眠数据。
+计算每个指标：TST、SE、SOL、N3%、REM%、夜间醒来次数。
+使用ANOVA分析各指标在三种环境间的差异。
+报告统计结果，得出优化光照是否显著改善睡眠质量的结论。
+
+#### 结论
+本框架提供了从数据处理到建模输出的完整流程，结合LuxPy、SciPy等工具，确保计算和优化的准确性。每个子问题均采用标准方法，适合竞赛环境下的建模需求。
+
+#### 参考文献
+
+LuxPy文档：https://luxpy.readthedocs.io/en/latest/
+IES TM-30-20：https://www.ies.org/store/technical-memoranda/
+CIE S 026/E：https://cie.co.at/publications/cie-s-026e-2018-melanopic-lux-and-spectral-melanopic-efficiency-function-for-light-and-health-applications
+SciPy优化：https://docs.scipy.org/doc/scipy/reference/optimize.html
+SciPy统计：https://docs.scipy.org/doc/scipy/reference/stats.html
