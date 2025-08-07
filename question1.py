@@ -29,10 +29,71 @@ def calc_coordinates(XYZ):
     xy = XYZ_to_xy(XYZ)
     return xy
 
-# 用McCamy近似公式法计算相对色温（CCT）
+# 用McCamy近似公式法计算相关色温
 def mccamy_calc_cct(xy):
     n = (xy[0] - 0.3320) / (xy[1] - 0.1858)
     return (-437 * n ** 3 + 3601 * n ** 2 - 6861 * n + 5514.31)
+
+# 用三角垂足插值法计算相关色温
+def triangle_calc_cct(xy):
+    sun_coordinates_dict = {}
+    
+    # 生成黑体轨迹坐标
+    for i in range(4000, 7001, 30):
+        x = -4.607e9 / (i ** 3) + 2967800 / (i ** 2) + 99.11 / i + 0.244063
+        y = -3 * x ** 2 + 2.87 * x - 0.275
+        sun_coordinates_dict[i] = (x, y)
+    for i in range(7030, 10001, 30):
+        x = -2.0064e9 / (i ** 3) + 1901800 / (i ** 2) + 247.48 / i + 0.23704
+        y = -3 * x ** 2 + 2.87 * x - 0.275
+        sun_coordinates_dict[i] = (x, y)
+    
+    # 将字典转换为按温度排序的列表
+    temperatures = sorted(sun_coordinates_dict.keys())
+    
+    min_distance_to_line = float('inf')
+    best_temp = 0
+    
+    # 遍历相邻的两个点，找到与目标点距离最近的线段
+    for i in range(len(temperatures) - 1):
+        t1, t2 = temperatures[i], temperatures[i + 1]
+        p1 = sun_coordinates_dict[t1]  # (x1, y1)
+        p2 = sun_coordinates_dict[t2]  # (x2, y2)
+        
+        # 计算线段p1p2上到目标点xy的垂足
+        x1, y1 = p1
+        x2, y2 = p2
+        x0, y0 = xy[0], xy[1]
+        
+        # 线段方向向量
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        # 如果两点重合，跳过
+        if dx == 0 and dy == 0:
+            continue
+            
+        # 计算参数t，表示垂足在线段上的位置
+        # 垂足公式：P = P1 + t * (P2 - P1)
+        t = ((x0 - x1) * dx + (y0 - y1) * dy) / (dx * dx + dy * dy)
+        
+        # 限制t在[0,1]范围内，确保垂足在线段上
+        t = max(0, min(1, t))
+        
+        # 计算垂足坐标
+        foot_x = x1 + t * dx
+        foot_y = y1 + t * dy
+        
+        # 计算目标点到垂足的距离
+        distance = np.sqrt((x0 - foot_x) ** 2 + (y0 - foot_y) ** 2)
+        
+        # 如果这是目前找到的最短距离，更新结果
+        if distance < min_distance_to_line:
+            min_distance_to_line = distance
+            # 使用线性插值计算对应的色温
+            best_temp = t1 + t * (t2 - t1)
+    
+    return best_temp
 
 
 # 主程序
@@ -58,3 +119,4 @@ if __name__ =='__main__':
     # CCT = colour.xy_to_CCT(chromaticity_coordinates, method='McCamy 1992')
     # print(f"库函数计算的CCT: {CCT}") # 库函数的计算结果与论文中提供的算式得到的结果不同，故舍弃
     print(f"用McCamy近似公式法计算的CCT: {mccamy_calc_cct(chromaticity_coordinates)}")
+    print(f"用三角垂足插值法计算的CCT: {triangle_calc_cct(chromaticity_coordinates)}")
