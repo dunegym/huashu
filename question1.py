@@ -34,11 +34,11 @@ def mccamy_calc_cct(xy):
     n = (xy[0] - 0.3320) / (xy[1] - 0.1858)
     return (-437 * n ** 3 + 3601 * n ** 2 - 6861 * n + 5514.31)
 
-# 用三角垂足插值法计算相关色温
-def triangle_calc_cct(xy):
+# 用三角垂足插值法(用日光轨迹近似黑体轨迹)计算相关色温
+def sun_triangle_calc_cct(xy):
     sun_coordinates_dict = {}
     
-    # 生成黑体轨迹坐标
+    # 生成日光轨迹坐标
     for i in range(4000, 7001, 30):
         x = -4.607e9 / (i ** 3) + 2967800 / (i ** 2) + 99.11 / i + 0.244063
         y = -3 * x ** 2 + 2.87 * x - 0.275
@@ -59,6 +59,108 @@ def triangle_calc_cct(xy):
         t1, t2 = temperatures[i], temperatures[i + 1]
         p1 = sun_coordinates_dict[t1]  # (x1, y1)
         p2 = sun_coordinates_dict[t2]  # (x2, y2)
+        
+        # 计算线段p1p2上到目标点xy的垂足
+        x1, y1 = p1
+        x2, y2 = p2
+        x0, y0 = xy[0], xy[1]
+        
+        # 线段方向向量
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        # 如果两点重合，跳过
+        if dx == 0 and dy == 0:
+            continue
+            
+        # 计算参数t，表示垂足在线段上的位置
+        # 垂足公式：P = P1 + t * (P2 - P1)
+        t = ((x0 - x1) * dx + (y0 - y1) * dy) / (dx * dx + dy * dy)
+        
+        # 限制t在[0,1]范围内，确保垂足在线段上
+        t = max(0, min(1, t))
+        
+        # 计算垂足坐标
+        foot_x = x1 + t * dx
+        foot_y = y1 + t * dy
+        
+        # 计算目标点到垂足的距离
+        distance = np.sqrt((x0 - foot_x) ** 2 + (y0 - foot_y) ** 2)
+        
+        # 如果这是目前找到的最短距离，更新结果
+        if distance < min_distance_to_line:
+            min_distance_to_line = distance
+            # 使用线性插值计算对应的色温
+            best_temp = t1 + t * (t2 - t1)
+    
+    return best_temp
+
+
+# 用三角垂足插值法(通过普朗克公式计算黑体轨迹)计算相关色温
+def blackbody_triangle_calc_cct(xy):
+    """
+    使用普朗克公式生成黑体轨迹，然后用三角垂足插值法计算相关色温
+    :param xy: 目标色品坐标 (x, y)
+    :return: 相关色温 CCT
+    """
+    # 物理常数
+    h = 6.62607015e-34  # 普朗克常数 (J·s)
+    c = 299792458       # 光速 (m/s)
+    k_b = 1.380649e-23  # 玻尔兹曼常数 (J/K)
+    
+    # 波长范围 (nm)
+    wavelengths = np.arange(380, 781, 5)  # 可见光范围，步长5nm
+    
+    # CIE 1931 2度标准观察者
+    cmfs = MSDS_CMFS['CIE 1931 2 Degree Standard Observer']
+    
+    blackbody_coordinates_dict = {}
+    
+    # 生成黑体轨迹坐标
+    for temp in range(1000, 20001, 50):  # 温度范围1000K到20000K，步长50K
+        # 计算该温度下的光谱功率分布
+        spectral_data = {}
+        
+        for wavelength in wavelengths:
+            # 将波长从nm转换为m
+            lambda_m = wavelength * 1e-9
+            
+            # 普朗克公式计算光谱辐射亮度
+            # B(λ,T) = (2hc²/λ⁵) * 1/(e^(hc/λkT) - 1)
+            numerator = 2 * h * c**2 / (lambda_m**5)
+            denominator = np.exp(h * c / (lambda_m * k_b * temp)) - 1
+            spectral_radiance = numerator / denominator
+            
+            spectral_data[wavelength] = spectral_radiance
+        
+        # 创建光谱分布对象
+        sd_blackbody = SpectralDistribution(spectral_data)
+        
+        try:
+            # 计算三刺激值
+            XYZ_blackbody = sd_to_XYZ(sd_blackbody, cmfs)
+            
+            # 计算色品坐标
+            xy_blackbody = XYZ_to_xy(XYZ_blackbody)
+            
+            # 存储该温度下的色品坐标
+            blackbody_coordinates_dict[temp] = (xy_blackbody[0], xy_blackbody[1])
+            
+        except Exception:
+            # 如果计算失败，跳过这个温度点
+            continue
+    
+    # 将字典转换为按温度排序的列表
+    temperatures = sorted(blackbody_coordinates_dict.keys())
+    
+    min_distance_to_line = float('inf')
+    best_temp = 0
+    
+    # 遍历相邻的两个点，找到与目标点距离最近的线段
+    for i in range(len(temperatures) - 1):
+        t1, t2 = temperatures[i], temperatures[i + 1]
+        p1 = blackbody_coordinates_dict[t1]  # (x1, y1)
+        p2 = blackbody_coordinates_dict[t2]  # (x2, y2)
         
         # 计算线段p1p2上到目标点xy的垂足
         x1, y1 = p1
@@ -119,4 +221,5 @@ if __name__ =='__main__':
     # CCT = colour.xy_to_CCT(chromaticity_coordinates, method='McCamy 1992')
     # print(f"库函数计算的CCT: {CCT}") # 库函数的计算结果与论文中提供的算式得到的结果不同，故舍弃
     print(f"用McCamy近似公式法计算的CCT: {mccamy_calc_cct(chromaticity_coordinates)}")
-    print(f"用三角垂足插值法计算的CCT: {triangle_calc_cct(chromaticity_coordinates)}")
+    print(f"用日光轨迹三角垂足插值法计算的CCT: {sun_triangle_calc_cct(chromaticity_coordinates)}")
+    print(f"用黑体轨迹三角垂足插值法计算的CCT: {blackbody_triangle_calc_cct(chromaticity_coordinates)}")
