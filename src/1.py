@@ -878,9 +878,9 @@ def calculate_mel_der_precise(test_sd):
 # 主程序
 if __name__ =='__main__':
     # 读取波长与光强进np数组，波长为整型，光强为双精度浮点型
-    df_1 = pd.read_excel('data.xlsx', sheet_name='Problem 1')
-    wavelength_arr = np.array([int(str(x)[:3]) for x in df_1['波长'].to_numpy()])
-    energy_arr = df_1['光强'].to_numpy().astype(np.float64)
+    df = pd.read_excel('data.xlsx', sheet_name='Problem 1')
+    wavelength_arr = np.array([int(str(x)[:3]) for x in df['波长'].to_numpy()])
+    energy_arr = df['光强'].to_numpy().astype(np.float64)
 
     # 将波长和能量数据组合成colour-science库所需的格式
     spectral_data = dict(zip(wavelength_arr, energy_arr))
