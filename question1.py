@@ -709,14 +709,14 @@ if __name__ =='__main__':
     color_deviation, closest_point, closest_temp = calc_color_deviation_uv(uv_coordinates)
     print(f"目标光源与黑体轨迹的色偏差: {color_deviation:.6f}")
     print(f"黑体轨迹上最近点的uv坐标: {closest_point}")
-    print(f"在1976色度图上对应的色温: {closest_temp}")
+    print(f"在1976uv色度图上用三角垂足插值法计算的CCT: {closest_temp}")
     
     # 3. 计算相对色温
     # CCT = colour.xy_to_CCT(xy_coordinates, method='McCamy 1992')
     # print(f"库函数计算的CCT: {CCT}") # 库函数的计算结果与论文中提供的算式得到的结果不同，故舍弃
     print(f"用McCamy近似公式法计算的CCT: {mccamy_calc_cct(xy_coordinates)}")
     # print(f"用日光轨迹三角垂足插值法计算的CCT: {sun_triangle_calc_cct(xy_coordinates)}")
-    print(f"在1931xy色度图上用黑体轨迹三角垂足插值法计算的CCT: {blackbody_triangle_calc_cct(xy_coordinates)}")
+    print(f"在1931xy色度图上用三角垂足插值法计算的CCT: {blackbody_triangle_calc_cct(xy_coordinates)}")
     
     # 4. 计算TM-30指数
     print("\n=== TM-30 颜色质量评估 ===")
