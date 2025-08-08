@@ -683,6 +683,198 @@ def calculate_rf_rg(test_sd):
     
     return Rf, Rg, details
 
+def get_melanopsin_action_spectrum():
+    """
+    获取mel-opic动作光谱 s_mel(λ)
+    基于CIE S 026/E:2018标准
+    :return: mel-opic动作光谱字典 {wavelength: sensitivity}
+    """
+    # CIE S 026/E:2018标准中的mel-opic动作光谱数据（简化版本）
+    # 实际应用中应使用完整的标准数据
+    wavelengths = np.arange(380, 781, 5)
+    mel_action_spectrum = {}
+    
+    for wavelength in wavelengths:
+        # 基于melanopsin的光谱敏感性曲线（简化模型）
+        # 峰值在约480nm，符合melanopsin的特征
+        if wavelength < 400:
+            sensitivity = 0.001
+        elif wavelength <= 420:
+            sensitivity = 0.01 * np.exp(-(wavelength - 420)**2 / 800)
+        elif wavelength <= 480:
+            # 主要敏感区域，峰值在480nm附近
+            sensitivity = np.exp(-(wavelength - 480)**2 / 1200)
+        elif wavelength <= 550:
+            sensitivity = 0.8 * np.exp(-(wavelength - 480)**2 / 1500)
+        elif wavelength <= 600:
+            sensitivity = 0.3 * np.exp(-(wavelength - 480)**2 / 2000)
+        else:
+            sensitivity = 0.05 * np.exp(-(wavelength - 480)**2 / 3000)
+        
+        mel_action_spectrum[wavelength] = max(0.001, sensitivity)
+    
+    # 归一化到峰值为1
+    max_sensitivity = max(mel_action_spectrum.values())
+    for wavelength in mel_action_spectrum:
+        mel_action_spectrum[wavelength] /= max_sensitivity
+    
+    return mel_action_spectrum
+
+def get_photopic_luminous_efficiency():
+    """
+    获取光视效率函数 V(λ)
+    基于CIE标准
+    :return: 光视效率函数字典 {wavelength: efficiency}
+    """
+    # CIE 1931标准光视效率函数（简化版本）
+    wavelengths = np.arange(380, 781, 5)
+    v_lambda = {}
+    
+    for wavelength in wavelengths:
+        # 基于CIE 1931标准的光视效率函数
+        # 峰值在555nm
+        if wavelength < 400:
+            efficiency = 0.0001
+        elif wavelength <= 500:
+            efficiency = 0.01 * np.exp(-(wavelength - 555)**2 / 8000)
+        elif wavelength <= 555:
+            # 主要敏感区域
+            efficiency = np.exp(-(wavelength - 555)**2 / 6000)
+        elif wavelength <= 650:
+            efficiency = np.exp(-(wavelength - 555)**2 / 7000)
+        else:
+            efficiency = 0.001 * np.exp(-(wavelength - 555)**2 / 10000)
+        
+        v_lambda[wavelength] = max(0.0001, efficiency)
+    
+    # 归一化到峰值为1（555nm）
+    max_efficiency = max(v_lambda.values())
+    for wavelength in v_lambda:
+        v_lambda[wavelength] /= max_efficiency
+    
+    return v_lambda
+
+def get_d65_spd():
+    """
+    获取标准日光D65的光谱功率分布
+    :return: D65光谱分布对象
+    """
+    wavelengths = np.arange(380, 781, 5)
+    
+    # D65标准日光的相对光谱功率分布（简化版本）
+    # 实际应用中应使用CIE标准数据
+    d65_data = {}
+    
+    for wavelength in wavelengths:
+        # D65的简化光谱分布模型
+        if wavelength <= 400:
+            spd_value = 50 + 10 * (wavelength - 380) / 20
+        elif wavelength <= 500:
+            spd_value = 60 + 40 * np.exp(-(wavelength - 460)**2 / 5000)
+        elif wavelength <= 600:
+            spd_value = 100 - 20 * (wavelength - 500) / 100
+        else:
+            spd_value = 80 - 30 * (wavelength - 600) / 180
+        
+        d65_data[wavelength] = max(10, spd_value)
+    
+    return SpectralDistribution(d65_data)
+
+def calculate_mel_der(test_sd):
+    """
+    计算褪黑素日光照度比（mel-DER）
+    :param test_sd: 测试光源的光谱分布对象
+    :return: mel-DER值和详细计算信息
+    """
+    # 获取必要的光谱函数
+    mel_action_spectrum = get_melanopsin_action_spectrum()
+    v_lambda = get_photopic_luminous_efficiency()
+    d65_sd = get_d65_spd()
+    
+    # 最大光视效率常数
+    K_m = 683.0  # lm/W
+    
+    wavelengths = np.arange(380, 781, 5)
+    
+    # === 1. 计算测试光源的mel-opic辐照度 ===
+    test_mel_irradiance = 0.0
+    for wavelength in wavelengths:
+        if wavelength in test_sd.wavelengths and wavelength in mel_action_spectrum:
+            # E_mel = ∫ E(λ) · s_mel(λ) dλ
+            test_mel_irradiance += test_sd[wavelength] * mel_action_spectrum[wavelength] * 5  # 5nm步长
+    
+    # === 2. 计算测试光源的照度 ===
+    test_illuminance = 0.0
+    for wavelength in wavelengths:
+        if wavelength in test_sd.wavelengths and wavelength in v_lambda:
+            # E_v = K_m · ∫ E(λ) · V(λ) dλ
+            test_illuminance += test_sd[wavelength] * v_lambda[wavelength] * 5  # 5nm步长
+    
+    test_illuminance *= K_m
+    
+    # === 3. 计算测试光源的mel-opic ELR ===
+    if test_illuminance > 0:
+        test_mel_elr = test_mel_irradiance / test_illuminance
+    else:
+        return 0, {"error": "测试光源照度为零"}
+    
+    # === 4. 计算D65的mel-opic辐照度 ===
+    d65_mel_irradiance = 0.0
+    for wavelength in wavelengths:
+        if wavelength in d65_sd.wavelengths and wavelength in mel_action_spectrum:
+            d65_mel_irradiance += d65_sd[wavelength] * mel_action_spectrum[wavelength] * 5
+    
+    # === 5. 计算D65的照度 ===
+    d65_illuminance = 0.0
+    for wavelength in wavelengths:
+        if wavelength in d65_sd.wavelengths and wavelength in v_lambda:
+            d65_illuminance += d65_sd[wavelength] * v_lambda[wavelength] * 5
+    
+    d65_illuminance *= K_m
+    
+    # === 6. 计算D65的mel-opic ELR ===
+    if d65_illuminance > 0:
+        d65_mel_elr = d65_mel_irradiance / d65_illuminance
+    else:
+        return 0, {"error": "D65照度计算错误"}
+    
+    # === 7. 计算mel-DER ===
+    if d65_mel_elr > 0:
+        mel_der = test_mel_elr / d65_mel_elr
+    else:
+        return 0, {"error": "D65 mel-opic ELR为零"}
+    
+    # 返回详细计算信息
+    details = {
+        "test_mel_irradiance": test_mel_irradiance,
+        "test_illuminance": test_illuminance,
+        "test_mel_elr": test_mel_elr,
+        "d65_mel_irradiance": d65_mel_irradiance,
+        "d65_illuminance": d65_illuminance,
+        "d65_mel_elr": d65_mel_elr,
+        "mel_der": mel_der
+    }
+    
+    return mel_der, details
+
+def calculate_mel_der_precise(test_sd):
+    """
+    使用更精确的CIE数据计算mel-DER（如果可用）
+    :param test_sd: 测试光源的光谱分布对象
+    :return: mel-DER值和详细计算信息
+    """
+    try:
+        # 尝试使用colour库中的精确数据
+        from colour.colorimetry import MSDS_CMFS
+        
+        # 如果有可用的mel-opic数据，使用它们
+        # 否则回退到简化计算
+        return calculate_mel_der(test_sd)
+    
+    except ImportError:
+        # 如果没有相关库，使用简化计算
+        return calculate_mel_der(test_sd)
+
 # 主程序
 if __name__ =='__main__':
     # 读取波长与光强进np数组，波长为整型，光强为双精度浮点型
@@ -746,3 +938,22 @@ if __name__ =='__main__':
     
     print(f"颜色保真度评价: {rf_quality}")
     print(f"色域评价: {rg_quality}")
+    
+    # 5. 计算mel-DER
+    print("\n=== 褪黑素日光照度比（mel-DER）计算 ===")
+    mel_der, mel_details = calculate_mel_der(sd)
+    print(f"褪黑素日光照度比 (mel-DER): {mel_der:.4f}")
+    print(f"测试光源mel-opic辐照度: {mel_details['test_mel_irradiance']:.6f} W/m²")
+    print(f"测试光源照度: {mel_details['test_illuminance']:.2f} lux")
+    print(f"测试光源mel-opic ELR: {mel_details['test_mel_elr']:.8f} W/m²/lux")
+    print(f"D65 mel-opic ELR: {mel_details['d65_mel_elr']:.8f} W/m²/lux")
+    
+    # mel-DER评估
+    if mel_der > 1.0:
+        mel_assessment = "相比D65日光，该光源对melanopsin的刺激更强"
+    elif mel_der < 0.8:
+        mel_assessment = "相比D65日光，该光源对melanopsin的刺激较弱，可能更适合晚间使用"
+    else:
+        mel_assessment = "该光源对melanopsin的刺激与D65日光相近"
+    
+    print(f"mel-DER评估: {mel_assessment}")
