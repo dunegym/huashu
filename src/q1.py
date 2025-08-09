@@ -514,10 +514,6 @@ def calculate_mel_der(test_sd):
     # 光视效率常数应用
     test_illuminance *= MAX_LUMINOUS_EFFICACY  # 683 lm/W
     
-    print(f"调试信息 - 测试光源计算:")
-    print(f"  原始mel-opic辐照度积分: {test_mel_irradiance}")
-    print(f"  原始照度积分: {test_illuminance}")
-    
     if test_illuminance <= 0:
         return 0, {"error": "测试光源照度为零"}
     
@@ -540,11 +536,6 @@ def calculate_mel_der(test_sd):
             d65_illuminance += d65_value * v_lambda[wavelength] * WAVELENGTH_STEP
     
     d65_illuminance *= MAX_LUMINOUS_EFFICACY
-    
-    print(f"调试信息 - D65计算:")
-    print(f"  D65缩放因子: {d65_scaling_factor}")
-    print(f"  D65 mel-opic辐照度: {d65_mel_irradiance}")
-    print(f"  D65照度: {d65_illuminance}")
     
     if d65_illuminance <= 0:
         return 0, {"error": "D65照度计算错误"}
