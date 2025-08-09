@@ -505,10 +505,18 @@ def calculate_mel_der(test_sd):
     
     for wavelength in VISIBLE_WAVELENGTHS:
         if wavelength in test_sd.wavelengths:
-            test_mel_irradiance += test_sd[wavelength] * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
-            test_illuminance += test_sd[wavelength] * v_lambda[wavelength] * WAVELENGTH_STEP
+            # 输入数据单位：mW/m²/nm，需要转换为W/m²/nm
+            spd_value = test_sd[wavelength] * 1e-3  # mW转换为W
+            # 修正积分计算 - 移除不必要的1e-9转换
+            test_mel_irradiance += spd_value * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
+            test_illuminance += spd_value * v_lambda[wavelength] * WAVELENGTH_STEP
     
-    test_illuminance *= MAX_LUMINOUS_EFFICACY
+    # 光视效率常数应用
+    test_illuminance *= MAX_LUMINOUS_EFFICACY  # 683 lm/W
+    
+    print(f"调试信息 - 测试光源计算:")
+    print(f"  原始mel-opic辐照度积分: {test_mel_irradiance}")
+    print(f"  原始照度积分: {test_illuminance}")
     
     if test_illuminance <= 0:
         return 0, {"error": "测试光源照度为零"}
@@ -519,12 +527,24 @@ def calculate_mel_der(test_sd):
     d65_mel_irradiance = 0.0
     d65_illuminance = 0.0
     
+    # 修正D65计算 - 使用合理的归一化
+    # 先计算D65的相对光谱分布，然后根据测试光源的总辐射量进行缩放
+    test_total_radiance = sum(test_sd[wl] * 1e-3 for wl in test_sd.wavelengths) * WAVELENGTH_STEP
+    d65_scaling_factor = test_total_radiance / 100.0  # 将D65缩放到与测试光源相似的量级
+    
     for wavelength in VISIBLE_WAVELENGTHS:
         if wavelength in d65_sd.wavelengths:
-            d65_mel_irradiance += d65_sd[wavelength] * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
-            d65_illuminance += d65_sd[wavelength] * v_lambda[wavelength] * WAVELENGTH_STEP
+            # 移除额外的单位转换
+            d65_value = d65_sd[wavelength] * d65_scaling_factor
+            d65_mel_irradiance += d65_value * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
+            d65_illuminance += d65_value * v_lambda[wavelength] * WAVELENGTH_STEP
     
     d65_illuminance *= MAX_LUMINOUS_EFFICACY
+    
+    print(f"调试信息 - D65计算:")
+    print(f"  D65缩放因子: {d65_scaling_factor}")
+    print(f"  D65 mel-opic辐照度: {d65_mel_irradiance}")
+    print(f"  D65照度: {d65_illuminance}")
     
     if d65_illuminance <= 0:
         return 0, {"error": "D65照度计算错误"}
