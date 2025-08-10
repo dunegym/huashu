@@ -11,6 +11,16 @@ from colour.adaptation import chromatic_adaptation_VonKries
 from colour.temperature import CCT_to_xy_CIE_D
 import colour
 
+# TODO: 修复 pandas 兼容性问题
+# 具体步骤：
+# 1. 找到 <anaconda root dir>\envs\<env_name>\Lib\site-packages\pyplr\CIE.py 文件
+# 2. 定位 get_CIES026 函数
+# 3. 将其中的代码行
+#       sss.index = pd.Int64Index(sss.index)
+#    替换为
+#       sss.index = sss.index.astype('int64')
+from pyplr.CIE import get_CIES026
+
 # ==================== 常量定义 ====================
 # 物理常数
 PLANCK_CONSTANT = 6.62607015e-34  # 普朗克常数 (J·s)
@@ -227,337 +237,82 @@ def calc_color_deviation_uv(uv_target):
     
     return min_distance, closest_point, best_temp
 
-# ==================== 参考光源和光谱函数 ====================
-def get_reference_illuminant(cct):
-    """根据CCT获取参考光源的光谱功率分布"""
-    spectral_data = {}
-    
-    if cct <= 4000:
-        # 使用普朗克辐射体
-        for wavelength in VISIBLE_WAVELENGTHS:
-            spectral_data[wavelength] = planck_spectral_radiance(wavelength, cct)
-    elif cct >= 5000:
-        # 使用CIE D系列光源
-        for wavelength in VISIBLE_WAVELENGTHS:
-            if wavelength <= 500:
-                spd_value = 1.0 + 0.5 * np.exp(-(wavelength - 460)**2 / 1000)
-            else:
-                spd_value = 1.0 * np.exp(-(wavelength - 560)**2 / 5000)
-            spectral_data[wavelength] = spd_value
-    else:
-        # 混合
-        ratio = (cct - 4000) / 1000
-        for wavelength in VISIBLE_WAVELENGTHS:
-            planck_value = planck_spectral_radiance(wavelength, cct)
-            if wavelength <= 500:
-                d_value = 1.0 + 0.5 * np.exp(-(wavelength - 460)**2 / 1000)
-            else:
-                d_value = 1.0 * np.exp(-(wavelength - 560)**2 / 5000)
-            spectral_data[wavelength] = (1 - ratio) * planck_value + ratio * d_value
-    
-    return create_spectral_distribution(spectral_data)
-
-def get_melanopsin_action_spectrum():
-    """获取mel-opic动作光谱 s_mel(λ)"""
-    mel_action_spectrum = {}
-    
-    for wavelength in VISIBLE_WAVELENGTHS:
-        if wavelength < 400:
-            sensitivity = 0.001
-        elif wavelength <= 420:
-            sensitivity = 0.01 * np.exp(-(wavelength - 420)**2 / 800)
-        elif wavelength <= 480:
-            sensitivity = np.exp(-(wavelength - 480)**2 / 1200)
-        elif wavelength <= 550:
-            sensitivity = 0.8 * np.exp(-(wavelength - 480)**2 / 1500)
-        elif wavelength <= 600:
-            sensitivity = 0.3 * np.exp(-(wavelength - 480)**2 / 2000)
-        else:
-            sensitivity = 0.05 * np.exp(-(wavelength - 480)**2 / 3000)
-        
-        mel_action_spectrum[wavelength] = max(0.001, sensitivity)
-    
-    # 归一化
-    max_sensitivity = max(mel_action_spectrum.values())
-    for wavelength in mel_action_spectrum:
-        mel_action_spectrum[wavelength] /= max_sensitivity
-    
-    return mel_action_spectrum
-
-def get_photopic_luminous_efficiency():
-    """获取光视效率函数 V(λ)"""
-    v_lambda = {}
-    
-    for wavelength in VISIBLE_WAVELENGTHS:
-        if wavelength < 400:
-            efficiency = 0.0001
-        elif wavelength <= 500:
-            efficiency = 0.01 * np.exp(-(wavelength - 555)**2 / 8000)
-        elif wavelength <= 555:
-            efficiency = np.exp(-(wavelength - 555)**2 / 6000)
-        elif wavelength <= 650:
-            efficiency = np.exp(-(wavelength - 555)**2 / 7000)
-        else:
-            efficiency = 0.001 * np.exp(-(wavelength - 555)**2 / 10000)
-        
-        v_lambda[wavelength] = max(0.0001, efficiency)
-    
-    # 归一化
-    max_efficiency = max(v_lambda.values())
-    for wavelength in v_lambda:
-        v_lambda[wavelength] /= max_efficiency
-    
-    return v_lambda
-
-def get_d65_spd():
-    """获取标准日光D65的光谱功率分布"""
-    d65_data = {}
-    
-    for wavelength in VISIBLE_WAVELENGTHS:
-        if wavelength <= 400:
-            spd_value = 50 + 10 * (wavelength - 380) / 20
-        elif wavelength <= 500:
-            spd_value = 60 + 40 * np.exp(-(wavelength - 460)**2 / 5000)
-        elif wavelength <= 600:
-            spd_value = 100 - 20 * (wavelength - 500) / 100
-        else:
-            spd_value = 80 - 30 * (wavelength - 600) / 180
-        
-        d65_data[wavelength] = max(10, spd_value)
-    
-    return create_spectral_distribution(d65_data)
-
 # ==================== TM-30和色彩评估 ====================
-def generate_ces_samples():
-    """生成99个颜色评估样本（CES）的反射率数据"""
-    ces_samples = []
-    
-    for hue in range(0, 360, 15):
-        for saturation in [0.3, 0.6, 0.9]:
-            for lightness in [0.3, 0.6, 0.8]:
-                if len(ces_samples) >= CES_SAMPLE_COUNT:
-                    break
-                
-                reflectance = {}
-                peak_wavelength = 380 + (hue / 360) * 400
-                
-                for wavelength in VISIBLE_WAVELENGTHS:
-                    base_reflectance = lightness * 0.8
-                    peak_contribution = saturation * 0.4 * np.exp(-(wavelength - peak_wavelength)**2 / 5000)
-                    reflectance[wavelength] = max(0.05, min(0.95, base_reflectance + peak_contribution))
-                
-                ces_samples.append(reflectance)
-                
-                if saturation == 0.9 and lightness == 0.8:
-                    break
-            if len(ces_samples) >= CES_SAMPLE_COUNT:
-                break
-        if len(ces_samples) >= CES_SAMPLE_COUNT:
-            break
-    
-    return ces_samples[:CES_SAMPLE_COUNT]
-
-def XYZ_to_CAM02UCS_simplified(XYZ, white_point_XYZ):
-    """简化的XYZ到CAM02-UCS转换"""
-    try:
-        white_point = white_point_XYZ / white_point_XYZ[1] * 100
-        return XYZ_to_CAM02UCS(XYZ, white_point)
-    except:
-        X, Y, Z = XYZ[0], XYZ[1], XYZ[2]
-        J = 100 * (Y / white_point_XYZ[1])**0.5
-        
-        total = X + Y + Z
-        x = safe_divide(X, total, CIE_STANDARD_POINT_X)
-        y = safe_divide(Y, total, CIE_STANDARD_POINT_Y)
-        
-        a = 500 * (x - CIE_STANDARD_POINT_X)
-        b = 200 * (y - CIE_STANDARD_POINT_Y)
-        
-        return np.array([J, a, b])
-
-def calculate_rf_rg(test_sd):
-    """计算TM-30标准的保真度指数(Rf)和色域指数(Rg)"""
-    cmfs = get_standard_observer(10)  # 尝试使用10度观察者
-    
-    # 计算测试光源的CCT
-    XYZ_test = sd_to_XYZ(test_sd, cmfs)
-    xy_test = XYZ_to_xy(XYZ_test)
-    cct_test = mccamy_calc_cct(xy_test)
-    
-    # 获取参考光源
-    ref_sd = get_reference_illuminant(cct_test)
-    XYZ_ref = sd_to_XYZ(ref_sd, cmfs)
-    
-    # 生成CES样本
-    ces_samples = generate_ces_samples()
-    
-    # 计算颜色坐标
-    test_colors = []
-    ref_colors = []
-    
-    for ces_reflectance in ces_samples:
-        test_spectral_data = {}
-        ref_spectral_data = {}
-        
-        for wavelength in VISIBLE_WAVELENGTHS:
-            if wavelength in ces_reflectance and wavelength in test_sd.wavelengths:
-                test_spectral_data[wavelength] = test_sd[wavelength] * ces_reflectance[wavelength]
-                ref_spectral_data[wavelength] = ref_sd[wavelength] * ces_reflectance[wavelength]
-        
-        if test_spectral_data and ref_spectral_data:
-            try:
-                test_ces_sd = create_spectral_distribution(test_spectral_data)
-                ref_ces_sd = create_spectral_distribution(ref_spectral_data)
-                
-                XYZ_test_ces = sd_to_XYZ(test_ces_sd, cmfs)
-                XYZ_ref_ces = sd_to_XYZ(ref_ces_sd, cmfs)
-                
-                cam02ucs_test = XYZ_to_CAM02UCS_simplified(XYZ_test_ces, XYZ_test)
-                cam02ucs_ref = XYZ_to_CAM02UCS_simplified(XYZ_ref_ces, XYZ_ref)
-                
-                test_colors.append(cam02ucs_test)
-                ref_colors.append(cam02ucs_ref)
-            except:
-                continue
-    
-    if len(test_colors) == 0:
-        return 0, 100, {"error": "无法计算有效的颜色样本"}
-    
-    # 计算Rf
-    color_differences = []
-    for test_color, ref_color in zip(test_colors, ref_colors):
-        delta_J = test_color[0] - ref_color[0]
-        delta_a = test_color[1] - ref_color[1]
-        delta_b = test_color[2] - ref_color[2]
-        
-        color_diff = np.sqrt(delta_J**2 + delta_a**2 + delta_b**2)
-        color_differences.append(color_diff)
-    
-    avg_color_diff = np.mean(color_differences)
-    Rf = 100 - TM30_SCALE_FACTOR * avg_color_diff
-    Rf = max(0, min(100, Rf))
-    
-    # 计算Rg
-    angle_per_bin = 360 / HUE_BIN_COUNT
-    test_hue_centers = []
-    ref_hue_centers = []
-    
-    for bin_idx in range(HUE_BIN_COUNT):
-        bin_test_a, bin_test_b = [], []
-        bin_ref_a, bin_ref_b = [], []
-        
-        for test_color, ref_color in zip(test_colors, ref_colors):
-            test_hue = np.arctan2(test_color[2], test_color[1]) * 180 / np.pi
-            if test_hue < 0:
-                test_hue += 360
-            
-            bin_start = bin_idx * angle_per_bin
-            bin_end = (bin_idx + 1) * angle_per_bin
-            
-            if bin_start <= test_hue < bin_end or (bin_idx == HUE_BIN_COUNT - 1 and test_hue >= bin_start):
-                bin_test_a.append(test_color[1])
-                bin_test_b.append(test_color[2])
-                bin_ref_a.append(ref_color[1])
-                bin_ref_b.append(ref_color[2])
-        
-        if bin_test_a:
-            test_hue_centers.append([np.mean(bin_test_a), np.mean(bin_test_b)])
-            ref_hue_centers.append([np.mean(bin_ref_a), np.mean(bin_ref_b)])
-    
-    # 计算色域面积
-    def polygon_area(points):
-        if len(points) < 3:
-            return 0
-        points = np.array(points)
-        x, y = points[:, 0], points[:, 1]
-        return 0.5 * abs(sum(x[i] * y[i + 1] - x[i + 1] * y[i] for i in range(-1, len(x) - 1)))
-    
-    if len(test_hue_centers) >= 3 and len(ref_hue_centers) >= 3:
-        test_area = polygon_area(test_hue_centers)
-        ref_area = polygon_area(ref_hue_centers)
-        Rg = safe_divide(test_area, ref_area, 1) * 100
-    else:
-        Rg = 100
-    
-    Rg = max(50, min(150, Rg))
-    
-    details = {
-        "test_cct": cct_test,
-        "num_valid_samples": len(test_colors),
-        "avg_color_difference": avg_color_diff,
-        "test_gamut_area": test_area if 'test_area' in locals() else 0,
-        "ref_gamut_area": ref_area if 'ref_area' in locals() else 0,
-        "hue_bins_used": len(test_hue_centers)
-    }
-    
-    return Rf, Rg, details
+def calc_rf_rg(spd_dict):
+    """使用colour库的TM-30方法计算Rf和Rg"""
+    spd = colour.SpectralDistribution(spd_dict, name="SPD")
+    results = colour.colour_fidelity_index(
+        spd, additional_data=True, method="ANSI/IES TM-30-18"
+    )  # 不加additional_data=True只会返回Rf
+    Rf = results.R_f
+    Rg = results.R_g
+    return Rf, Rg
 
 # ==================== mel-DER计算 ====================
-def calculate_mel_der(test_sd):
-    """计算褪黑素日光照度比（mel-DER）"""
-    mel_action_spectrum = get_melanopsin_action_spectrum()
-    v_lambda = get_photopic_luminous_efficiency()
-    d65_sd = get_d65_spd()
-    
-    # 计算测试光源的mel-opic辐照度和照度
-    test_mel_irradiance = 0.0
-    test_illuminance = 0.0
-    
-    for wavelength in VISIBLE_WAVELENGTHS:
-        if wavelength in test_sd.wavelengths:
-            # 输入数据单位：mW/m²/nm，需要转换为W/m²/nm
-            spd_value = test_sd[wavelength] * 1e-3  # mW转换为W
-            # 修正积分计算 - 移除不必要的1e-9转换
-            test_mel_irradiance += spd_value * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
-            test_illuminance += spd_value * v_lambda[wavelength] * WAVELENGTH_STEP
-    
-    # 光视效率常数应用
-    test_illuminance *= MAX_LUMINOUS_EFFICACY  # 683 lm/W
-    
-    if test_illuminance <= 0:
-        return 0, {"error": "测试光源照度为零"}
-    
-    test_mel_elr = test_mel_irradiance / test_illuminance
-    
-    # 计算D65的mel-opic辐照度和照度
-    d65_mel_irradiance = 0.0
-    d65_illuminance = 0.0
-    
-    # 修正D65计算 - 使用合理的归一化
-    # 先计算D65的相对光谱分布，然后根据测试光源的总辐射量进行缩放
-    test_total_radiance = sum(test_sd[wl] * 1e-3 for wl in test_sd.wavelengths) * WAVELENGTH_STEP
-    d65_scaling_factor = test_total_radiance / 100.0  # 将D65缩放到与测试光源相似的量级
-    
-    for wavelength in VISIBLE_WAVELENGTHS:
-        if wavelength in d65_sd.wavelengths:
-            # 移除额外的单位转换
-            d65_value = d65_sd[wavelength] * d65_scaling_factor
-            d65_mel_irradiance += d65_value * mel_action_spectrum[wavelength] * WAVELENGTH_STEP
-            d65_illuminance += d65_value * v_lambda[wavelength] * WAVELENGTH_STEP
-    
-    d65_illuminance *= MAX_LUMINOUS_EFFICACY
-    
-    if d65_illuminance <= 0:
-        return 0, {"error": "D65照度计算错误"}
-    
-    d65_mel_elr = d65_mel_irradiance / d65_illuminance
-    
-    if d65_mel_elr <= 0:
-        return 0, {"error": "D65 mel-opic ELR为零"}
-    
-    mel_der = test_mel_elr / d65_mel_elr
-    
-    details = {
-        "test_mel_irradiance": test_mel_irradiance,
-        "test_illuminance": test_illuminance,
-        "test_mel_elr": test_mel_elr,
-        "d65_mel_irradiance": d65_mel_irradiance,
-        "d65_illuminance": d65_illuminance,
-        "d65_mel_elr": d65_mel_elr,
-        "mel_der": mel_der
-    }
-    
-    return mel_der, details
+def calculate_mel_DER(light_source_sd):
+    """计算 melanopic DER (mel-DER)"""
+    cie_s026 = get_CIES026()
+    melanopic_sensitivity_data = cie_s026["I"]  # melanopic 灵敏度数据
+    mel_spd_dict = dict(
+        zip(melanopic_sensitivity_data.index.values, melanopic_sensitivity_data.values)
+    )
+    melanopic_sensitivity = colour.SpectralDistribution(mel_spd_dict)
+
+    D65 = colour.SDS_ILLUMINANTS["D65"]  # D65 光源
+
+    min_wvl = max(
+        melanopic_sensitivity.wavelengths.min(),
+        light_source_sd.wavelengths.min(),
+        D65.wavelengths.min(),
+    )
+    max_wvl = min(
+        melanopic_sensitivity.wavelengths.max(),
+        light_source_sd.wavelengths.max(),
+        D65.wavelengths.max(),
+    )
+    wvls = colour.SpectralShape(min_wvl, max_wvl, 1)
+
+    melanopic_sensitivity = melanopic_sensitivity.interpolate(wvls)
+    light_source_sd = light_source_sd.interpolate(wvls)
+    D65 = D65.interpolate(wvls)
+
+    cmfs = colour.MSDS_CMFS["CIE 1931 2 Degree Standard Observer"]
+    cmfs = cmfs.copy().align(wvls)
+    cmfs_v_dict = dict(zip(cmfs.wavelengths, cmfs.values[:, 1]))
+    V_lambda = colour.SpectralDistribution(cmfs_v_dict)  # 明视觉函数数据
+
+    # melanopic有效辐照度
+    E_mel_test = np.trapezoid(
+        light_source_sd.values * melanopic_sensitivity.values,
+        light_source_sd.wavelengths,
+    )
+
+    # 明视觉照度
+    E_v_test = np.trapezoid(
+        light_source_sd.values * V_lambda.values,
+        light_source_sd.wavelengths,
+    )
+
+    # D65光源的melanopic有效辐照度
+    E_mel_D65 = np.trapezoid(
+        D65.values * melanopic_sensitivity.values,
+        D65.wavelengths,
+    )
+
+    # D65光源的明视觉照度
+    E_v_D65 = np.trapezoid(
+        D65.values * V_lambda.values,
+        D65.wavelengths,
+    )
+
+    # 测试光源的melanopic与明视觉的比值(mel-ELR)
+    K_mel_v_test = E_mel_test / E_v_test
+    # D65光源的melanopic与明视觉的比值(mel-EDI)
+    K_mel_v_D65 = E_mel_D65 / E_v_D65
+    # 测试光源与D65光源的melanopic效应比值(mel-DER)
+    mel_DER = K_mel_v_test / K_mel_v_D65
+
+    return mel_DER
 
 # ==================== 主程序 ====================
 if __name__ == '__main__':
@@ -593,12 +348,9 @@ if __name__ == '__main__':
     
     # 4. 计算TM-30指数
     print("\n=== TM-30 颜色质量评估 ===")
-    Rf, Rg, tm30_details = calculate_rf_rg(sd)
+    Rf, Rg = calc_rf_rg(spectral_data)
     print(f"保真度指数 (Rf): {Rf}")
     print(f"色域指数 (Rg): {Rg}")
-    print(f"有效颜色样本数: {tm30_details['num_valid_samples']}")
-    print(f"平均色差: {tm30_details['avg_color_difference']}")
-    print(f"使用的色调箱数: {tm30_details['hue_bins_used']}")
     
     # 评估结果
     if Rf >= 80:
@@ -622,12 +374,8 @@ if __name__ == '__main__':
     
     # 5. 计算mel-DER
     print("\n=== 褪黑素日光照度比（mel-DER）计算 ===")
-    mel_der, mel_details = calculate_mel_der(sd)
+    mel_der = calculate_mel_DER(sd)
     print(f"褪黑素日光照度比 (mel-DER): {mel_der:.4f}")
-    print(f"测试光源mel-opic辐照度: {mel_details['test_mel_irradiance']:.6f} W/m²")
-    print(f"测试光源照度: {mel_details['test_illuminance']:.2f} lux")
-    print(f"测试光源mel-opic ELR: {mel_details['test_mel_elr']:.8f} W/m²/lux")
-    print(f"D65 mel-opic ELR: {mel_details['d65_mel_elr']:.8f} W/m²/lux")
     
     # mel-DER评估
     if mel_der > 1.0:
