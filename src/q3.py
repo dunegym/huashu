@@ -237,8 +237,18 @@ def calculate_cct(spd, wavelengths, x_bar, y_bar, z_bar):
 def calculate_spd_total(weights, led_spds):
     """计算LED合成光谱（权重加权和）"""
     w_B, w_G, w_R, w_WW, w_CW = weights
-    return (w_B * led_spds['B'] + w_G * led_spds['G'] + w_R * led_spds['R'] +
-            w_WW * led_spds['WW'] + w_CW * led_spds['CW'])
+    # 权重归一化，使权重和为1
+    weights_sum = w_B + w_G + w_R + w_WW + w_CW
+    if weights_sum == 0:
+        weights_sum = 1e-8  # 避免除零
+    w_B_norm = w_B / weights_sum
+    w_G_norm = w_G / weights_sum
+    w_R_norm = w_R / weights_sum
+    w_WW_norm = w_WW / weights_sum
+    w_CW_norm = w_CW / weights_sum
+    
+    return (w_B_norm * led_spds['B'] + w_G_norm * led_spds['G'] + w_R_norm * led_spds['R'] +
+            w_WW_norm * led_spds['WW'] + w_CW_norm * led_spds['CW'])
 
 def calculate_colorimetric_values(spd, wavelengths, x_bar, y_bar, z_bar, color_samples, sample_wavelengths):
     """计算光谱的颜色参数（XYZ、xy坐标、色样XYZ）"""
@@ -390,25 +400,36 @@ def main():
 
         # 计算优化结果参数
         optimal_weights = result.x
-        spd_total = calculate_spd_total(optimal_weights, led_spds)
+        
+        # 归一化权重使其和为1
+        weights_sum = sum(optimal_weights)
+        if weights_sum == 0:
+            weights_sum = 1e-8
+        normalized_weights = [w / weights_sum for w in optimal_weights]
+        
+        spd_total = calculate_spd_total(normalized_weights, led_spds)
         cct = calculate_cct(spd_total, solar_wavelengths, x_bar, y_bar, z_bar)
         rf, rg = calculate_rf_and_rg(spd_total, solar_wavelengths, x_bar, y_bar, z_bar, color_samples, sample_wavelengths, cct)
         mel_der = calculate_mel_der(spd_total, solar_wavelengths, mel_spectrum, d65_spd)
         rmse = np.sqrt(np.mean((spd_total - target_spd)**2))
 
-        # 存储结果
+        # 存储结果（使用归一化权重）
         results.append({
             'time_point': t+1,
             'time': f"{5 + t//2}:{30 + (t%2)*30:02d}",  # 从5:30开始，每30分钟一个点
-            'w_B': optimal_weights[0], 'w_G': optimal_weights[1], 'w_R': optimal_weights[2],
-            'w_WW': optimal_weights[3], 'w_CW': optimal_weights[4],
+            'w_B': normalized_weights[0], 'w_G': normalized_weights[1], 'w_R': normalized_weights[2],
+            'w_WW': normalized_weights[3], 'w_CW': normalized_weights[4],
+            'weights_sum': sum(normalized_weights),  # 应该等于1
             'cct': cct, 'target_cct': current_target_cct, 'rmse': rmse, 'rf': rf, 'rg': rg, 'mel_der': mel_der
         })
 
     # 保存权重策略
     results_df = pd.DataFrame(results)
-    results_df[['time_point', 'time', 'w_B', 'w_G', 'w_R', 'w_WW', 'w_CW']].to_excel('results/led_weight_strategy.xlsx', index=False)
+    # 添加权重和验证列
+    output_cols = ['time_point', 'time', 'w_B', 'w_G', 'w_R', 'w_WW', 'w_CW', 'weights_sum']
+    results_df[output_cols].to_excel('results/led_weight_strategy.xlsx', index=False)
     print("权重控制策略已保存至 results/led_weight_strategy.xlsx")
+    print(f"权重和验证: 所有时间点权重和 = {results_df['weights_sum'].unique()}")
 
     # 4. 代表性时间点验证（早晨、正午、傍晚）
     print("4. 代表性时间点验证与分析...")
@@ -441,12 +462,13 @@ def main():
         ax.legend()
         ax.grid(alpha=0.3)
 
-        # 添加参数文本
+        # 添加参数文本（包含权重信息）
         params = results_df.iloc[idx]
         textstr = (f'CCT: {params["cct"]:.0f} K\n'
                   f'目标CCT: {params["target_cct"]:.0f} K\n'
                   f'RMSE: {params["rmse"]:.4f}\n'
-                  f'Rf: {params["rf"]:.1f}, Rg: {params["rg"]:.1f}')
+                  f'Rf: {params["rf"]:.1f}, Rg: {params["rg"]:.1f}\n'
+                  f'权重和: {params["weights_sum"]:.3f}')
         ax.text(0.05, 0.95, textstr, transform=ax.transAxes, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
@@ -455,16 +477,17 @@ def main():
     plt.show()
 
     # 参数对比表
-    params_df = results_df.iloc[selected_indices][['time', 'cct', 'target_cct', 'rmse', 'rf', 'rg', 'mel_der']]
-    params_df.columns = ['时间', '合成CCT (K)', '目标CCT (K)', 'RMSE', 'Rf', 'Rg', 'mel-DER']
+    params_df = results_df.iloc[selected_indices][['time', 'cct', 'target_cct', 'rmse', 'rf', 'rg', 'mel_der', 'weights_sum']]
+    params_df.columns = ['时间', '合成CCT (K)', '目标CCT (K)', 'RMSE', 'Rf', 'Rg', 'mel-DER', '权重和']
     print("\n代表性时间点参数对比表:")
-    print(params_df.round(2).to_string(index=False))
-    params_df.round(2).to_excel('results/parameter_comparison.xlsx', index=False)
+    print(params_df.round(3).to_string(index=False))
+    params_df.round(3).to_excel('results/parameter_comparison.xlsx', index=False)
 
     # 5. 结果分析
     print("\n5. 结果分析:")
     print(f"实际处理时间点数: {num_time_points}")
     print(f"平均RMSE: {results_df['rmse'].mean():.4f}（光谱匹配度）")
+    print(f"权重归一化验证: 所有权重和均为 {results_df['weights_sum'].iloc[0]:.1f}")
     if num_time_points >= 3:
         print(f"节律趋势: 早期CCT {results_df.iloc[0]['cct']:.0f}K → 中期{results_df.iloc[num_time_points//2]['cct']:.0f}K → 晚期{results_df.iloc[-1]['cct']:.0f}K")
     print(f"颜色还原: 最小Rf {results_df['rf'].min():.1f} ≥ 80，满足照明需求")

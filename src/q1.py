@@ -312,6 +312,14 @@ def calculate_mel_DER(light_source_sd):
     # 测试光源与D65光源的melanopic效应比值(mel-DER)
     mel_DER = K_mel_v_test / K_mel_v_D65
 
+    # 打印中间计算参数
+    print(f"测试光源 melanopic 有效辐照度 (E_mel_test): {E_mel_test:.6f}")
+    print(f"测试光源明视觉照度 (E_v_test): {E_v_test:.6f}")
+    print(f"测试光源 melanopic ELR (K_mel_v_test): {K_mel_v_test:.6f}")
+    print(f"D65光源 melanopic 有效辐照度 (E_mel_D65): {E_mel_D65:.6f}")
+    print(f"D65光源明视觉照度 (E_v_D65): {E_v_D65:.6f}")
+    print(f"D65光源 melanopic ELR (K_mel_v_D65): {K_mel_v_D65:.6f}")
+
     return mel_DER
 
 # ==================== 主程序 ====================

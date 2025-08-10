@@ -171,7 +171,7 @@ def generate_plots(df_long, metrics_to_plot, output_path='results/sleep_metrics_
     n_metrics = len(metrics_to_plot)
     
     # 创建更大的图形来容纳多种图表类型
-    fig = plt.figure(figsize=(24, 16))
+    fig = plt.figure(figsize=(24, 18))  # 增加高度
     
     # 为每个指标创建3种图表：箱形图、小提琴图、条形图
     for i, metric in enumerate(metrics_to_plot):
@@ -182,9 +182,9 @@ def generate_plots(df_long, metrics_to_plot, output_path='results/sleep_metrics_
         sns.stripplot(x='Environment', y=metric, data=df_long, ax=ax1,
                       color='black', jitter=0.2, size=4,
                       order=['助眠灯', '普通LED', '黑暗'])
-        ax1.set_title(f'{metric} - 箱形图', fontsize=12, fontweight='bold')
-        ax1.set_xlabel('光照环境', fontsize=10)
-        ax1.set_ylabel('值', fontsize=10)
+        ax1.set_title(f'{metric}', fontsize=11, fontweight='bold')  # 简化标题
+        ax1.set_xlabel('光照环境', fontsize=9)
+        ax1.set_ylabel('值', fontsize=9)
         ax1.grid(alpha=0.3)
         
         # 小提琴图
@@ -196,9 +196,9 @@ def generate_plots(df_long, metrics_to_plot, output_path='results/sleep_metrics_
         sns.stripplot(x='Environment', y=metric, data=df_long, ax=ax2,
                       color='white', jitter=0.15, size=3, alpha=0.8,
                       order=['助眠灯', '普通LED', '黑暗'])
-        ax2.set_title(f'{metric} - 小提琴图', fontsize=12, fontweight='bold')
-        ax2.set_xlabel('光照环境', fontsize=10)
-        ax2.set_ylabel('值', fontsize=10)
+        ax2.set_title(f'{metric}', fontsize=11, fontweight='bold')  # 简化标题
+        ax2.set_xlabel('光照环境', fontsize=9)
+        ax2.set_ylabel('值', fontsize=9)
         ax2.grid(alpha=0.3)
         
         # 均值条形图 + 误差棒
@@ -217,19 +217,23 @@ def generate_plots(df_long, metrics_to_plot, output_path='results/sleep_metrics_
         # 添加数值标签
         for j, (bar, mean_val, se_val) in enumerate(zip(bars, summary_stats['mean'], summary_stats['se'])):
             height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + se_val,
+            ax3.text(bar.get_x() + bar.get_width()/2., height + se_val + height*0.05,
                      f'{mean_val:.1f}±{se_val:.1f}',
-                     ha='center', va='bottom', fontsize=9)
+                     ha='center', va='bottom', fontsize=8)
         
-        ax3.set_title(f'{metric} - 均值±标准误', fontsize=12, fontweight='bold')
-        ax3.set_xlabel('光照环境', fontsize=10)
-        ax3.set_ylabel('均值', fontsize=10)
+        ax3.set_title(f'{metric}', fontsize=11, fontweight='bold')  # 简化标题
+        ax3.set_xlabel('光照环境', fontsize=9)
+        ax3.set_ylabel('均值', fontsize=9)
         ax3.set_xticks(range(3))
         ax3.set_xticklabels(['助眠灯', '普通LED', '黑暗'])
         ax3.grid(alpha=0.3, axis='y')
+        
+        # 为数值标签留出更多空间
+        y_max = ax3.get_ylim()[1]
+        ax3.set_ylim(top=y_max * 1.15)
 
-    plt.tight_layout(pad=2.0)
-    plt.suptitle('不同光照环境对各项睡眠指标影响的综合可视化分析', fontsize=20, y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # 为主标题留出空间
+    plt.suptitle('不同光照环境对各项睡眠指标影响的综合可视化分析', fontsize=18, y=0.98)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"综合分析图表已保存至: {output_path}")
@@ -241,7 +245,7 @@ def generate_separate_plots(df_long, metrics_to_plot):
     n_metrics = len(metrics_to_plot)
     
     # 1. 箱形图
-    fig = plt.figure(figsize=(20, 8))
+    fig = plt.figure(figsize=(20, 10))  # 增加高度
     for i, metric in enumerate(metrics_to_plot):
         ax = plt.subplot(2, 3, i + 1)
         sns.boxplot(x='Environment', y=metric, data=df_long, ax=ax,
@@ -254,14 +258,14 @@ def generate_separate_plots(df_long, metrics_to_plot):
         ax.set_ylabel('值', fontsize=10)
         ax.grid(alpha=0.3)
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为主标题留出空间
     plt.suptitle('睡眠指标箱形图分析', fontsize=16, y=0.98)
     plt.savefig('results/boxplots_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
     print("箱形图已保存至: results/boxplots_comparison.png")
     
     # 2. 小提琴图
-    fig = plt.figure(figsize=(20, 8))
+    fig = plt.figure(figsize=(20, 10))  # 增加高度
     for i, metric in enumerate(metrics_to_plot):
         ax = plt.subplot(2, 3, i + 1)
         sns.violinplot(x='Environment', y=metric, data=df_long, ax=ax,
@@ -275,14 +279,14 @@ def generate_separate_plots(df_long, metrics_to_plot):
         ax.set_ylabel('值', fontsize=10)
         ax.grid(alpha=0.3)
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为主标题留出空间
     plt.suptitle('睡眠指标小提琴图分析', fontsize=16, y=0.98)
     plt.savefig('results/violinplots_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
     print("小提琴图已保存至: results/violinplots_comparison.png")
     
     # 3. 柱状图（均值条形图）
-    fig = plt.figure(figsize=(20, 8))
+    fig = plt.figure(figsize=(20, 10))  # 增加高度
     for i, metric in enumerate(metrics_to_plot):
         ax = plt.subplot(2, 3, i + 1)
         
@@ -299,18 +303,22 @@ def generate_separate_plots(df_long, metrics_to_plot):
         # 添加数值标签
         for j, (bar, mean_val, se_val) in enumerate(zip(bars, summary_stats['mean'], summary_stats['se'])):
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height + se_val,
+            ax.text(bar.get_x() + bar.get_width()/2., height + se_val + height*0.05,  # 调整标签位置
                     f'{mean_val:.1f}±{se_val:.1f}',
                     ha='center', va='bottom', fontsize=9)
         
-        ax.set_title(f'{metric}', fontsize=12, fontweight='bold')
+        ax.set_title(f'{metric}', fontsize=12, fontweight='bold')  # 简化标题
         ax.set_xlabel('光照环境', fontsize=10)
         ax.set_ylabel('均值', fontsize=10)
         ax.set_xticks(range(3))
         ax.set_xticklabels(['助眠灯', '普通LED', '黑暗'])
         ax.grid(alpha=0.3, axis='y')
+        
+        # 为数值标签留出更多空间
+        y_max = ax.get_ylim()[1]
+        ax.set_ylim(top=y_max * 1.15)
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为主标题留出空间
     plt.suptitle('睡眠指标均值条形图分析', fontsize=16, y=0.98)
     plt.savefig('results/barplots_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -321,7 +329,7 @@ def generate_additional_plots(df_long, metrics_to_plot):
     生成额外的分析图表
     """
     # 1. 相关性热力图
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(16, 14))  # 增加高度
     
     # 为每个环境生成相关性矩阵
     environments = ['助眠灯', '普通LED', '黑暗']
@@ -343,48 +351,134 @@ def generate_additional_plots(df_long, metrics_to_plot):
                cbar_kws={'label': '相关系数'})
     axes[1, 1].set_title('整体 - 指标相关性', fontsize=14, fontweight='bold')
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为主标题留出空间
+    plt.suptitle('睡眠指标相关性分析', fontsize=18, y=0.98)
     plt.savefig('results/correlation_heatmaps.png', dpi=300, bbox_inches='tight')
     plt.close()
     print("相关性热力图已保存至: results/correlation_heatmaps.png")
     
-    # 2. 雷达图比较
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    # 2. 改进的雷达图比较
+    fig, ax = plt.subplots(figsize=(14, 14), subplot_kw=dict(projection='polar'))
     
-    # 计算每个环境的标准化均值
+    # 计算每个环境的均值
     env_means = {}
+    environments = ['助眠灯', '普通LED', '黑暗']
     for env in environments:
         env_data = df_long[df_long['Environment'] == env][metrics_to_plot]
         env_means[env] = env_data.mean()
     
-    # 标准化数据（0-1范围）
-    all_values = np.concatenate([env_means[env].values for env in environments])
-    min_val, max_val = all_values.min(), all_values.max()
+    # 改进的标准化方法：为每个指标单独标准化
+    normalized_data = {}
+    for env in environments:
+        normalized_data[env] = []
     
-    angles = np.linspace(0, 2*np.pi, len(metrics_to_plot), endpoint=False).tolist()
+    for metric in metrics_to_plot:
+        # 获取该指标在所有环境下的数据
+        all_values_for_metric = [env_means[env][metric] for env in environments]
+        min_val = min(all_values_for_metric)
+        max_val = max(all_values_for_metric)
+        
+        # 避免除零错误
+        if max_val - min_val == 0:
+            for env in environments:
+                normalized_data[env].append(0.5)  # 如果所有值相同，设为中间值
+        else:
+            for env in environments:
+                # 对于"越小越好"的指标，反转标准化
+                if metric in ['入睡潜伏期(SOL)', '夜间醒来次数(Awakenings)']:
+                    normalized_val = 1 - (env_means[env][metric] - min_val) / (max_val - min_val)
+                else:
+                    normalized_val = (env_means[env][metric] - min_val) / (max_val - min_val)
+                normalized_data[env].append(normalized_val)
+    
+    # 设置角度 - 确保均匀分布
+    n_metrics = len(metrics_to_plot)
+    angles = np.linspace(0, 2*np.pi, n_metrics, endpoint=False).tolist()
     angles += angles[:1]  # 闭合图形
     
-    colors = ['red', 'blue', 'green']
+    # 绘制雷达图
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']  # 更好看的颜色
+    line_styles = ['-', '--', '-.']
+    markers = ['o', 's', '^']
+    
     for i, env in enumerate(environments):
-        values = [(val - min_val) / (max_val - min_val) for val in env_means[env].values]
-        values += values[:1]  # 闭合图形
+        values = normalized_data[env] + normalized_data[env][:1]  # 闭合图形
         
-        ax.plot(angles, values, 'o-', linewidth=2, label=env, color=colors[i])
-        ax.fill(angles, values, alpha=0.25, color=colors[i])
+        # 绘制线条和填充
+        line = ax.plot(angles, values, linewidth=3, label=env, 
+                      color=colors[i], linestyle=line_styles[i], 
+                      marker=markers[i], markersize=8, alpha=0.8)
+        ax.fill(angles, values, alpha=0.15, color=colors[i])
+        
+        # 在每个数据点添加数值标签
+        for angle, value, metric in zip(angles[:-1], values[:-1], metrics_to_plot):
+            # 计算标签位置（稍微向外偏移）
+            label_radius = value + 0.1
+            if label_radius > 1:
+                label_radius = 1.05
+            
+            # 转换极坐标到笛卡尔坐标来确定文本位置
+            x = label_radius * np.cos(angle)
+            y = label_radius * np.sin(angle)
+            
+            # 获取原始数值用于标签
+            original_value = env_means[env][metric]
+            ax.text(angle, label_radius, f'{original_value:.1f}', 
+                   ha='center', va='center', fontsize=9, 
+                   color=colors[i], fontweight='bold',
+                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', 
+                           edgecolor=colors[i], alpha=0.8))
+    
+    # 设置标签 - 简化指标名称
+    metric_labels = []
+    for metric in metrics_to_plot:
+        if 'TST' in metric:
+            metric_labels.append('总睡眠时长')
+        elif 'SE' in metric:
+            metric_labels.append('睡眠效率')
+        elif 'SOL' in metric:
+            metric_labels.append('入睡潜伏期')
+        elif 'N3p' in metric:
+            metric_labels.append('深睡眠比例')
+        elif 'REMp' in metric:
+            metric_labels.append('REM比例')
+        elif 'Awakenings' in metric:
+            metric_labels.append('夜间醒来次数')
+        else:
+            metric_labels.append(metric.split('(')[0])
     
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels([metric.split('(')[0] for metric in metrics_to_plot])
-    ax.set_ylim(0, 1)
-    ax.set_title('各环境睡眠指标雷达图比较', size=16, fontweight='bold', pad=20)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1.0))
-    ax.grid(True)
+    ax.set_xticklabels(metric_labels, fontsize=12, fontweight='bold')
     
-    plt.savefig('results/radar_comparison.png', dpi=300, bbox_inches='tight')
+    # 设置径向轴
+    ax.set_ylim(0, 1)
+    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    # 添加标题和图例
+    ax.set_title('各环境睡眠指标雷达图比较\n(标准化后，越靠外圈表示表现越好)', 
+                 size=16, fontweight='bold', pad=40)
+    
+    # 调整图例位置
+    legend = ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), 
+                      fontsize=12, frameon=True, fancybox=True, shadow=True)
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_alpha(0.9)
+    
+    # 添加说明文字
+    ax.text(0.5, -0.15, '注：入睡潜伏期和夜间醒来次数已反向标准化（越小越好）', 
+           transform=ax.transAxes, ha='center', va='top', 
+           fontsize=10, style='italic', color='gray')
+    
+    plt.tight_layout()
+    plt.savefig('results/radar_comparison.png', dpi=300, bbox_inches='tight', 
+                facecolor='white', edgecolor='none')
     plt.close()
     print("雷达图比较已保存至: results/radar_comparison.png")
     
     # 3. 分布密度图
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))  # 增加高度
     axes = axes.flatten()
     
     for i, metric in enumerate(metrics_to_plot):
@@ -392,13 +486,14 @@ def generate_additional_plots(df_long, metrics_to_plot):
             env_data = df_long[df_long['Environment'] == env][metric]
             sns.kdeplot(data=env_data, ax=axes[i], label=env, alpha=0.7, linewidth=2)
         
-        axes[i].set_title(f'{metric} - 概率密度分布', fontsize=12, fontweight='bold')
+        axes[i].set_title(f'{metric}', fontsize=12, fontweight='bold')  # 简化标题
         axes[i].set_xlabel('值', fontsize=10)
         axes[i].set_ylabel('密度', fontsize=10)
         axes[i].legend()
         axes[i].grid(alpha=0.3)
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # 为主标题留出空间
+    plt.suptitle('睡眠指标概率密度分布分析', fontsize=18, y=0.98)
     plt.savefig('results/density_distributions.png', dpi=300, bbox_inches='tight')
     plt.close()
     print("密度分布图已保存至: results/density_distributions.png")
